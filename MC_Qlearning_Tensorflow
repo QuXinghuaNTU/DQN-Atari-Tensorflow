@@ -1,0 +1,49 @@
+import tensorflow as tf
+import gym
+import numpy as np
+import matplotlib.pyplot as plt
+from tensorflow import keras
+from tensorflow.contrib.layers import fully_connected as fc
+
+# define the gym environement
+env = gym.make('MountainCar-v0')
+input_shape = env.observation_space.shape
+num_actions     = env.action_space.n
+
+def model_NN(inputs,output_num, scope, reuse=False):
+    output = inputs
+    with tf.variable_scope(scope, reuse=reuse):
+        output = fc(output, 100, activation_fn=tf.nn.relu)
+        output = fc(output, 100, activation_fn=tf.nn.relu)
+        output = fc(output, output_num, activation_fn=None)
+    return output
+# parameter settings
+gamma        = 0.95
+learningrate = 0.001
+
+## define the place holder
+state     = tf.placeholder(tf.uint8, [None] + list(input_shape))
+state_new = tf.placeholder(tf.uint8, [None] + list(input_shape))
+action    = tf.placeholder(tf.int32, [None])
+reward    = tf.placeholder(tf.float32, [None])
+done      = tf.placeholder(tf.float32, [None])
+
+global_vars = tf.GraphKeys.GLOBAL_VARIABLES
+current_Q   = model_NN(state, num_actions, scope='Q_Net', reuse=False)
+target_Q    = model_NN(state_new, num_actions, scope='Target_Net', reuse=False)
+# obtain the weight for each scope
+Q_net_W      = tf.get_collection(global_vars, scope='Q_Net')
+Target_net_W = tf.get_collection(global_vars, scope='Target_Net')
+# calculate the error
+onehot_actions = tf.one_hot(action, num_actions, 1.0, 0.0)
+target_Q_max   = tf.reduce_max(target_Q, axis=1)
+q_target_val = reward + gamma * (1. - done) * target_Q_max
+q_candidate_val = tf.reduce_sum(current_Q * onehot_actions, axis=1)
+total_error = tf.reduce_sum(tf.square(q_target_val - q_candidate_val))
+# define the optimizer
+trainer = tf.train.AdamOptimizer(learning_rate=learningrate)
+updateModel = self.trainer.minimize(total_error,var_list = Q_net_W)
+
+tf_config = tf.ConfigProto(device_count = {'GPU': 0})
+sess = tf.Session(config=tf_config)
+sess.run(tf.global_variables_initializer())
